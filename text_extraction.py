@@ -193,16 +193,3 @@ class PDFMinerExtractor:
             pages_text.append(new_text)
 
         return str(pages_text)
-
-
-
-
-
-
-
-
-
-
-
-
-
