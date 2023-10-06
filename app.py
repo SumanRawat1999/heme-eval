@@ -1,3 +1,4 @@
+#importing all the necessary libraries and python files
 import boto3
 import logging
 import os
@@ -13,15 +14,16 @@ from text_extraction import TextractExtractor, PDFMinerExtractor
 from LLM import get_chatgpt_response
 from prompts import AI_SUMMARY_PROMPT
 
+# Loading the variables from .env file
 load_dotenv()
 
-#import openai api key
+# Import openai api key
 openai.api_key = os.environ["openai_api_key"]
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
-#import aws credentials
+# Import aws credentials
 aws_default_region = os.environ.get('AWS_DEFAULT_REGION')
 aws_access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
 aws_secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
@@ -36,7 +38,6 @@ s3 = boto3.client(service_name='s3',region_name=aws_default_region,
                 aws_secret_access_key=aws_secret_access_key)
 
 
-
 # Code for UI
 st.title("AI PARAMETER EXTRACTION EVALUATION")
 uploaded_files = st.file_uploader("Upload PDF Files", type=["pdf"], accept_multiple_files=True)
@@ -45,60 +46,39 @@ llm = st.multiselect("Select a LLM",["GPT-4", "Claude-2"])
 submit = st.button("Submit")
 
 
-
 # Uploading PDFs to S3
 def upload_pdf_to_s3(uploaded_files, s3_folder, bucket_name):
-    s3 = boto3.client('s3')
     
     if uploaded_files:
         for pdf_file in uploaded_files:
             try:
-                # Generate a unique folder name for each PDF file
-                # Generate a unique folder name using a timestamp and a random number
+                # Generate a unique folder name for each PDF file using a timestamp and a random number
                 timestamp = int(time.time() * 1000)  # High-resolution timestamp
                 random_number = str(uuid.uuid4().int & (1<<31) - 1)  # Random number
-                folder_name = str(uuid.uuid4())
-                #folder_key = f"{s3_folder}{folder_name}/"
                 folder_key = f"{s3_folder}{timestamp}-{random_number}/"
                 pdf_name = pdf_file.name
-                st.write(folder_key)
-                st.write(pdf_name)
-                # Create the folder in S3
+                # Create the folder: "original" in S3
                 s3.put_object(Bucket=bucket_name, Key=f"{folder_key}original/")
                 # Upload the PDF file to the "original" folder
                 s3.upload_fileobj(pdf_file, bucket_name, f"{folder_key}original/{pdf_file.name}")
-                st.success(f"Uploaded {pdf_file.name} to {bucket_name}/{folder_key}original/")
                 return folder_key, pdf_name
             
             except Exception as e:
                 st.error(f"Error uploading {pdf_file.name}: {str(e)}")
 
 
-
 def upload_text_file_to_s3(bucket_name, folder_key):
-    # Initialize the S3 client
-    s3 = boto3.client('s3')
     
     try:
-        # Create the folder in S3
+        # Create the folder: "raw_text" in S3
         s3.put_object(Bucket=bucket_name, Key=f"{folder_key}raw_text/")
-        # Upload the file to S3
+        # Upload the text file to the "raw_text" folder
         s3.upload_file("raw.txt", bucket_name, f"{folder_key}raw_text/raw.txt")
         s3_file_name = f"{folder_key}raw_text/raw.txt"
-        st.write(f'Successfully uploaded to s3://{bucket_name}/{folder_key}raw_text/')
         return s3_file_name
+    
     except Exception as e:
         st.error(f'Error uploading file to S3: {e}')
-
-
-
-# # Generating unique file number
-# def generate_unique_folder_name():
-#     # Generate a unique folder name using a timestamp and a random number
-#     timestamp = int(time.time() * 1000)  # High-resolution timestamp
-#     random_number = uuid.uuid4().int & (1<<31) - 1  # Random number
-#     return f"{timestamp}-{random_number}"
-
 
 
 def string_to_file(input_string, filename):
@@ -141,17 +121,6 @@ def read_file_from_s3(bucket, s3_file_name):
     str: The content of the file as a string.
     """
     try:
-        # Get AWS credentials from environment variables
-        aws_default_region = os.environ.get('AWS_DEFAULT_REGION')
-        aws_access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
-        aws_secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
-        logger.debug("AWS credentials loaded from environment")
-
-        # Create an S3 client
-        s3 = boto3.client(service_name='s3',
-                        region_name=aws_default_region,
-                        aws_access_key_id=aws_access_key_id,
-                        aws_secret_access_key=aws_secret_access_key)
         
         logger.debug(f"Connecting to S3 bucket: {bucket}")
 
@@ -170,12 +139,6 @@ def read_file_from_s3(bucket, s3_file_name):
         raise
 
 
-
-
-
-
-
-
 def main():
     if submit:
         with st.spinner("Loading"):
@@ -185,38 +148,33 @@ def main():
             
             # Construct the document_name for process_textract_extraction
             document_name = f"{folder_key}original/{pdf_name}"
-            st.write("document: ",document_name)
-            
-            # if text_extraction == "Textract" and llm == "GPT-4":
-            text_extractor = TextractExtractor()
-            extracted_text = text_extractor.get_raw_text_list(bucket_name, document_name)
-            extracted_text = str(extracted_text)
-            st.write("Here is the extracted text", extracted_text)
-            string_to_file(extracted_text,"raw.txt")
-                
-            s3_file_name = upload_text_file_to_s3(bucket_name,folder_key)
-            raw_text_path = f"{folder_key}raw_text/raw.txt"
-            st.write("----------------------------------------")
-            st.write(raw_text_path)
-            file_data = read_file_from_s3(bucket_name,raw_text_path)
-            st.write("--------------------------------------")
-            st.write("---------------------------------------")
-            st.write(file_data)
-            st.write("--------------------------------------")
-            st.write("---------------------------------------")
-            st.write("--------------------------------------")
-            st.write("---------------------------------------")
-            st.write(AI_SUMMARY_PROMPT)
-            gpt_response = get_chatgpt_response(AI_SUMMARY_PROMPT,file_data)
-            st.write(gpt_response)
+
+            if "Textract" in text_extraction and "GPT-4" in llm:
+
+                # Call to extract text from PDF using Textract
+                text_extractor = TextractExtractor()
+                extracted_text = text_extractor.get_raw_text_list(bucket_name, document_name)
+                extracted_text = str(extracted_text)
+
+                # Call to save all the extracted text from PDF to "raw.txt" locally
+                string_to_file(extracted_text,"raw.txt")
+
+                # Call to upload the "raw.txt" file to S3
+                s3_file_name = upload_text_file_to_s3(bucket_name,folder_key)
+                raw_text_path = f"{folder_key}raw_text/raw.txt"
+
+                # Call to read the "raw.txt" file from the folder: "raw_text" in S3
+                file_data = read_file_from_s3(bucket_name,raw_text_path)
+
+                # Call to create an AI_SUMMARY response from GPT-4
+                gpt_response = get_chatgpt_response(AI_SUMMARY_PROMPT,file_data)
+                st.write(gpt_response)
+
+            else:
+            # Display an error message if one or both options are not selected
+                st.error("Please select a text extraction tool and an LLM.")
 
 
-            # if text_extraction == "Textract":
-            #     text_extractor = TextractExtractor()
-            #     extracted_text = text_extractor.get_raw_text_list(bucket_name, document_name)
-            #     st.write(extracted_text)
-            #     string_to_file(extracted_text,"raw.txt")
-            #     upload_text_file_to_s3(bucket_name, s3_folder, folder_key, "raw.txt")
             # elif text_extraction == "PDFMiner":
             #     pdfminer_extractor = PDFMinerExtractor()
             #     extracted_text = pdfminer_extractor.extract_text(bucket_name, document_name)
@@ -227,5 +185,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-#testing
