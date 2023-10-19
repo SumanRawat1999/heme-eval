@@ -51,7 +51,7 @@ class TextFieldsManager:
                 st.write("")
 
             with col2.expander('Gold standard',expanded=True):
-                self.user_input['gold_std'] = st.text_area('Gold standard input', '', height=200, key=f"Enter Text {self.counter + 1}")
+                self.user_input['gold_std'] = st.text_area('Gold standard output', '', height=200, key=f"Enter Text {self.counter + 1}")
                 self.user_input['text_extraction'] = self.text_extraction
                 
             
@@ -69,7 +69,7 @@ class TextFieldsManager:
                 st.write("")
 
             with col4.expander('Gold standard',expanded=True):
-                self.user_input['gold_std'] = st.text_area('Gold standard input', '', height=200, key=f"Enter Text {self.counter + 3}")
+                self.user_input['gold_std'] = st.text_area('Gold standard output', '', height=200, key=f"Enter Text {self.counter + 3}")
         
         self.user_input['llm'] = self.llm
         self.user_input['user_prompt'] = self.USER_EVALUATE_PROMPT_1
