@@ -59,14 +59,6 @@ class TextFieldsManager:
             col3,col4 = st.columns([3,3])
             with col3.expander('Input',expanded=True):
                 self.user_input['uploaded_text'] = st.text_area('Enter the text to be evaluated here', '', height=200, key=f"Enter Text {self.counter + 2}")
-                st.write("")
-                st.write("")
-                st.write("")
-                st.write("")
-                st.write("")
-                st.write("")
-                st.write("")
-                st.write("")
 
             with col4.expander('Gold standard',expanded=True):
                 self.user_input['gold_std'] = st.text_area('Gold standard output', '', height=200, key=f"Enter Text {self.counter + 3}")
