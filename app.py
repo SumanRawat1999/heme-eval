@@ -8,11 +8,11 @@ import json
 from dotenv import load_dotenv
 import time
 import openai
-from botocore.exceptions import BotoCoreError, ClientError
 import uuid # to create random unique names for files
+from botocore.exceptions import BotoCoreError, ClientError
 from text_extraction import TextractExtractor, PDFMinerExtractor
 from LLM import get_chatgpt_response, get_anthropic_response
-from prompts import AI_SUMMARY_PROMPT, EVALUATE_PROMPT
+from prompts import AI_SUMMARY_PROMPT, EVALUATE_PROMPT, CLAUDE_AI_SUMMARY_PROMPT, CLAUDE_EVALUATE_PROMPT, PDFMINER_EVALUATE_PROMPT
 from streamlit import session_state as state
 
 # Loading the variables from .env file
@@ -46,6 +46,7 @@ col1, col2, col3 = st.columns(3)
 
 with col1:
     uploaded_files = st.file_uploader("Upload PDF Files", type=["pdf"], accept_multiple_files=True)
+    #st.write(uploaded_files)
 with col2:
     text_extraction = st.multiselect("Select a text extraction tool",["Textract","PDFMiner"])
 with col3:
@@ -152,12 +153,15 @@ def read_file_from_s3(bucket, s3_file_name):
 
 
 def main():
+    # Record the start time
+    start_time = time.time()
 
     if submit:
         with st.spinner("Loading"):
 
             # Call upload_pdf_to_s3 and get the folder_key and pdf_file.name
             folder_key, pdf_name = upload_pdf_to_s3(uploaded_files, s3_folder, bucket_name)
+            st.write(folder_key)
             
             # Construct the document_name for process_textract_extraction
             document_name = f"{folder_key}original/{pdf_name}"
@@ -216,13 +220,13 @@ def main():
                 file_data = read_file_from_s3(bucket_name,raw_text_path)
 
                 # Call to create an AI_SUMMARY response from Claude-2
-                claude_response = get_anthropic_response(AI_SUMMARY_PROMPT,file_data)
+                claude_response = get_anthropic_response(CLAUDE_AI_SUMMARY_PROMPT,file_data)
                 
                 # prompt
                 if USER_EVALUATE_PROMPT:
                     eval_prompt = USER_EVALUATE_PROMPT
                 else:
-                    eval_prompt = EVALUATE_PROMPT
+                    eval_prompt = CLAUDE_EVALUATE_PROMPT
                 col4,col5 = st.columns(2)
                 with col4:
                     ai_summary = st.text_area("Here is the AI_SUMMARY", claude_response, height = 500, key = "654")
@@ -235,13 +239,91 @@ def main():
                 st.text_area("Here is the evaluation", eval_claude_response, height = 200, key = "012")
 
 
+            if "PDFMiner" in text_extraction and "GPT-4" in llm:
+
+                # Call to extract text from PDF using Textract
+                text_extractor = PDFMinerExtractor()
+                extracted_text = text_extractor.extract_text(bucket_name, document_name)
+                extracted_text = str(extracted_text)
+
+                # Call to save all the extracted text from PDF to "raw.txt" locally
+                string_to_file(extracted_text,"raw.txt")
+
+                # Call to upload the "raw.txt" file to S3
+                s3_file_name = upload_text_file_to_s3(bucket_name,folder_key)
+                raw_text_path = f"{folder_key}raw_text/raw.txt"
+
+                # Call to read the "raw.txt" file from the folder: "raw_text" in S3
+                file_data = read_file_from_s3(bucket_name,raw_text_path)
+
+                # Call to create an AI_SUMMARY response from GPT-4
+                gpt_response = get_chatgpt_response(AI_SUMMARY_PROMPT,file_data)
+                
+                # prompt
+                if USER_EVALUATE_PROMPT:
+                    eval_prompt = USER_EVALUATE_PROMPT
+                else:
+                    eval_prompt = PDFMINER_EVALUATE_PROMPT
+                col4,col5 = st.columns(2)
+                with col4:
+                    ai_summary = st.text_area("Here is the AI_SUMMARY", gpt_response, height = 500, key = "456")
+                with col5:
+                    gold_parameters = st.text_area("Enter Gold Parameters here", gold_std, height = 500, key = "789")
+
+                input_parameters = f"extracted parameters: {ai_summary}/nstandard parameters: {gold_parameters}"
+                eval_gpt_response = get_chatgpt_response(eval_prompt, input_parameters)
+                
+                st.text_area("Here is the evaluation", eval_gpt_response, height = 200, key = "012")
+
+            if "PDFMiner" in text_extraction and "Claude-2" in llm:      
+
+                # Call to extract text from PDF using Textract
+                text_extractor = PDFMinerExtractor()
+                extracted_text = text_extractor.extract_text(bucket_name, document_name)
+                extracted_text = str(extracted_text)
+
+                # Call to save all the extracted text from PDF to "raw.txt" locally
+                string_to_file(extracted_text,"raw.txt")
+
+                # Call to upload the "raw.txt" file to S3
+                s3_file_name = upload_text_file_to_s3(bucket_name,folder_key)
+                raw_text_path = f"{folder_key}raw_text/raw.txt"
+
+                # Call to read the "raw.txt" file from the folder: "raw_text" in S3
+                file_data = read_file_from_s3(bucket_name,raw_text_path)
+
+                # Call to create an AI_SUMMARY response from Claude-2
+                claude_response = get_anthropic_response(CLAUDE_AI_SUMMARY_PROMPT,file_data)
+                
+                # prompt
+                if USER_EVALUATE_PROMPT:
+                    eval_prompt = USER_EVALUATE_PROMPT
+                else:
+                    eval_prompt = CLAUDE_EVALUATE_PROMPT
+                col4,col5 = st.columns(2)
+                with col4:
+                    ai_summary = st.text_area("Here is the AI_SUMMARY", claude_response, height = 500, key = "654")
+                with col5:
+                    gold_parameters = st.text_area("Enter Gold Parameters here", gold_std, height = 500, key = "987")
+
+                input_parameters = f"extracted parameters: {ai_summary}/nstandard parameters: {gold_parameters}"
+                eval_claude_response = get_anthropic_response(eval_prompt, input_parameters)
+                
+                st.text_area("Here is the evaluation", eval_claude_response, height = 200, key = "012")
 
 
-            # elif text_extraction == "PDFMiner":
-            #     pdfminer_extractor = PDFMinerExtractor()
-            #     extracted_text = pdfminer_extractor.extract_text(bucket_name, document_name)
-            #     st.write(extracted_text)
-            #     string_to_file(extracted_text,"raw.txt")
+
+    # Record the end time
+    end_time = time.time()
+
+    # Calculate the elapsed time
+    elapsed_time = end_time - start_time
+
+    # Round the elapsed time to two decimal places when printing
+    rounded_elapsed_time = round(elapsed_time, 2)
+
+    # Print the elapsed time
+    st.write(f"Elapsed time for the if loop: {rounded_elapsed_time} seconds")
 
     
 
