@@ -1,4 +1,12 @@
 #importing all the necessary libraries and python files
+import secrets
+import string
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+import base64
+import io
 import boto3
 import logging
 import os
@@ -12,11 +20,13 @@ import uuid # to create random unique names for files
 from botocore.exceptions import BotoCoreError, ClientError
 from text_extraction import TextractExtractor, PDFMinerExtractor
 from LLM import get_chatgpt_response, get_anthropic_response
-from prompts import AI_SUMMARY_PROMPT, EVALUATE_PROMPT, CLAUDE_AI_SUMMARY_PROMPT, CLAUDE_EVALUATE_PROMPT, PDFMINER_EVALUATE_PROMPT
+# from prompts import AI_SUMMARY_PROMPT, EVALUATE_PROMPT, CLAUDE_AI_SUMMARY_PROMPT, CLAUDE_EVALUATE_PROMPT, PDFMINER_EVALUATE_PROMPT
 from streamlit import session_state as state
 from UI import TextFieldsManager
-#from s3 import Input_PDF_or_Text_Processor
-from text_extraction import TextractExtractor, PDFMinerExtractor
+from reportlab.lib.pagesizes import letter, landscape
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+# from reportlab.platypus.tables import TableStyleValue
+
 
 # Loading the variables from .env file
 load_dotenv()
@@ -42,6 +52,7 @@ s3 = boto3.client(service_name='s3',region_name=aws_default_region,
                 aws_secret_access_key=aws_secret_access_key)
 
 st.set_page_config(layout="wide")
+
 
 def upload_pdf_to_s3(uploaded_files, s3_folder, bucket_name):
     
@@ -151,8 +162,6 @@ def read_file_from_s3(bucket, s3_file_name):
         logger.exception(f"Failed to read file: {s3_file_name} from bucket: {bucket}. Error: {str(e)}")
         raise
 
-import secrets
-import string
 
 def generate_random_key(length):
     # Define the character set from which to generate the key
@@ -163,11 +172,127 @@ def generate_random_key(length):
     
     return random_key
 
-# # Specify the desired length of your random key
-# key_length = 16
 
-# # Generate a random key of the specified length
-# random_key = generate_random_key(key_length)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ########################### VERSION 1: PDF generation ###############################################
+
+
+# # Function to convert DataFrame to PDF
+# def _draw_as_table(df, pagesize):
+#     alternating_colors = [['white'] * len(df.columns), ['lightgray'] * len(df.columns)] * len(df)
+#     alternating_colors = alternating_colors[:len(df)]
+#     fig, ax = plt.subplots(figsize=pagesize)
+#     ax.axis('tight')
+#     ax.axis('off')
+#     the_table = ax.table(cellText=df.values,
+#                          rowLabels=df.index,
+#                          colLabels=df.columns,
+#                          rowColours=['lightblue'] * len(df),
+#                          colColours=['lightblue'] * len(df.columns),
+#                          cellColours=alternating_colors,
+#                          cellLoc='left',
+#                          loc='center')
+#     return fig
+
+# # Function to create PDF from DataFrame
+# def dataframe_to_pdf(df, filename, numpages=(1, 1), pagesize=(11, 8.5)):
+#     with PdfPages(filename) as pdf:
+#         nh, nv = numpages
+#         rows_per_page = len(df) // nh
+#         cols_per_page = len(df.columns) // nv
+#         for i in range(0, nh):
+#             for j in range(0, nv):
+#                 page = df.iloc[(i * rows_per_page):min((i + 1) * rows_per_page, len(df)),
+#                                (j * cols_per_page):min((j + 1) * cols_per_page, len(df.columns))]
+#                 fig = _draw_as_table(page, pagesize)
+#                 if nh > 1 or nv > 1:
+#                     fig.text(0.5, 0.5 / pagesize[0],
+#                              "Part-{}x{}: Page-{}".format(i + 1, j + 1, i * nv + j + 1),
+#                              ha='center', fontsize=8)
+#                 pdf.savefig(fig, bbox_inches='tight')
+#                 plt.close()
+
+
+# Function to enable file download
+def get_binary_file_downloader_html(pdf_filename, pdf_bytes):
+    b64 = base64.b64encode(pdf_bytes).decode()
+    href = f"<a href='data:application/pdf;base64,{b64}' download='{pdf_filename}'>Download PDF File</a>"
+    return href
+
+
+#  #####################################################################################################
+
+
+
+
+# Define a custom function to set the cell height based on the content length
+def set_max_cell_height(val, max_height=300):
+    if isinstance(val, str):
+        return f'height: {max(len(val), max_height)}px'
+    return ''
+
+
+# Create a Streamlit download link for the PDF
+# def download_link(pdf_data, filename):
+#     st.markdown(
+#         f'<a href="data:application/pdf;base64,{pdf_data}" download="{filename}">Click here to download the PDF</a>',
+#         unsafe_allow_html=True,
+#     )
+
+
+def generate_pdf(data_frame, filename):
+    doc = SimpleDocTemplate(filename, pagesize=letter)
+    elements = []
+
+    # Convert the DataFrame to a list of lists
+    data = [list(data_frame.columns)] + data_frame.values.tolist()
+    table = Table(data)
+
+    # Define the table style
+    style = TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), (0.8, 0.8, 0.8)),  # Header row background color
+        ('TEXTCOLOR', (0, 0), (-1, 0), (0, 0, 0)),  # Header row text color
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),  # All cells center-aligned
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),  # Header row font
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),  # Header row padding
+        ('BACKGROUND', (0, 1), (-1, -1), (0.9, 0.9, 0.9)),  # Data row background color
+        ('TEXTCOLOR', (0, 1), (-1, -1), (0, 0, 0)),  # Data row text color
+        ('GRID', (0, 0), (-1, -1), 1, (0, 0, 0)),  # Gridlines
+    ])
+    table.setStyle(style)
+    elements.append(table)
+
+    # Build the PDF
+    doc.build(elements)
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -175,13 +300,13 @@ def generate_random_key(length):
 def main():
     text_fields_manager = TextFieldsManager()
     submit, user_input_list = text_fields_manager.run()
-  
+    
     if submit:
         with st.spinner("Loading"):
             # st.write(len(user_input_list))
             #st.write("------------------------------")
-            #st.write("User Input Dictionaries:")
-            #st.write(user_input_list)
+            # st.write("User Input Dictionaries:")
+            # st.write(user_input_list)
             # for i, user_input_dict in enumerate(user_input_list):
             #     st.write(f"Upload {i + 1}:", user_input_dict)
             # st.write("------------------------------")
@@ -194,19 +319,26 @@ def main():
             #     st.write(data["text_extraction"])
             #     st.write(data["llm"])
             #     st.write(data["gold_std"])
-            #     st.write(data["user_prompt"])
+            #     st.write(data["user_prompt_1"])
             #     num = num+1
                 
             # st.write("*******************************")
-            num = 1
-            for data in user_input_list:
+
+            
+            # Creating a dataframe
+            data_list = []
+
+            #num = 1
+            for num, data in enumerate(user_input_list, start=1):
+                response_data = {
+                    "Input": None,
+                    "Post process output": None,
+                    "Gold standard output": None,
+                    "LLM evaluation": None,
+                    "Human Eval": None
+                }
                 
                 if "uploaded_files" in data and data["uploaded_files"]:
-                    # folder_key, pdf_name = upload_pdf_to_s3(data["uploaded_files"], s3_folder, bucket_name)
-                    #st.write("FOlder name: ",folder_key)
-                    #st.write("PDF name: ",pdf_name)
-                    # Construct the document_name for process_textract_extraction
-                    # document_name = f"{folder_key}original/{pdf_name}"
 
                     if "Textract" in data["text_extraction"] and "GPT-4" in data["llm"]:
                         folder_key, pdf_name = upload_pdf_to_s3(data["uploaded_files"], s3_folder, bucket_name)
@@ -215,13 +347,11 @@ def main():
                         # Construct the document_name for process_textract_extraction
                         document_name = f"{folder_key}original/{pdf_name}"
 
-
                         #counter = 1
                         # Call to extract text from PDF using Textract
                         text_extractor = TextractExtractor()
                         extracted_text = text_extractor.get_raw_text_list(bucket_name, document_name)
                         extracted_text = str(extracted_text)
-
 
                         # Call to save all the extracted text from PDF to "raw.txt" locally
                         string_to_file(extracted_text,"raw.txt")
@@ -233,27 +363,26 @@ def main():
                         # Call to read the "raw.txt" file from the folder: "raw_text" in S3
                         file_data = read_file_from_s3(bucket_name,raw_text_path)
 
-                        # Call to create an AI_SUMMARY response from GPT-4
-                        gpt_response = get_chatgpt_response(data["user_prompt"],file_data)
-                        
-                        # # prompt
-                        # if data["user_prompt"]:
-                        #     eval_prompt = data["user_prompt"]
-                        # else:
-                        #     eval_prompt = EVALUATE_PROMPT
-                        col1,col2,col3 = st.columns(3)
-                        with col1:
-                            input_text = st.text_area(f"Input {num}", extracted_text, height=300, key=f"Text counter {generate_random_key(11)}")
-                        with col2:
-                            ai_summary = st.text_area(f"Post process output {num}", gpt_response, height=300, key=f"Text counter {generate_random_key(12)}")
-                        with col3:
-                            gold_parameters = st.text_area(f"Gold standard output {num}", data["gold_std"], height=300, key=f"Text counter {generate_random_key(13)}")
-                       
+                        # Call to create "post process output" from LLM
+                        eval_response_1 = get_chatgpt_response(data["user_prompt_1"],file_data)
 
-            #                 input_parameters = f"extracted parameters: {ai_summary}/nstandard parameters: {gold_parameters}"
-            #                 eval_gpt_response = get_chatgpt_response(eval_prompt, input_parameters)
-                            
-            #                 st.text_area("Here is the evaluation", eval_gpt_response, height = 200, key = "012")
+                        # Call to create an evaluation based on prompt_2 from LLM
+                        input_parameters = f"extracted parameters: {eval_response_1}/nstandard parameters: {data['gold_std']}"
+                        eval_response_2 = get_chatgpt_response(data["user_prompt_2"], input_parameters)
+
+                        col1,col2,col3,col4,col5 = st.columns(5)
+                        with col1:
+                            input_text = st.text_area(f"Input {num}", extracted_text, height=200, key=f"Text counter {generate_random_key(11)}")
+                        with col2:
+                            ai_summary = st.text_area(f"Post process output {num}", eval_response_1, height=200, key=f"Text counter {generate_random_key(12)}")
+                        with col3:
+                            gold_parameters = st.text_area(f"Gold standard output {num}", data["gold_std"], height=200, key=f"Text counter {generate_random_key(13)}")
+                        with col4:
+                            llm_eval = st.text_area(f"LLM evaluation {num}", eval_response_2, height=200, key=f"Text counter {generate_random_key(14)}")
+                        with col5:
+                            human_eval = st.text_area(f"Human Eval {num}", data["human_eval"], height=200, key=f"Text counter {generate_random_key(15)}")                  
+                        
+
 
                     if "Textract" in data["text_extraction"] and "Claude-2" in data["llm"]:      
                         folder_key, pdf_name = upload_pdf_to_s3(data["uploaded_files"], s3_folder, bucket_name)
@@ -262,7 +391,6 @@ def main():
                         # Construct the document_name for process_textract_extraction
                         document_name = f"{folder_key}original/{pdf_name}"
 
-
                         # Call to extract text from PDF using Textract
                         text_extractor = TextractExtractor()
                         extracted_text = text_extractor.get_raw_text_list(bucket_name, document_name)
@@ -278,29 +406,26 @@ def main():
                         # Call to read the "raw.txt" file from the folder: "raw_text" in S3
                         file_data = read_file_from_s3(bucket_name,raw_text_path)
 
-                        # Call to create an AI_SUMMARY response from Claude-2
-                        claude_response = get_anthropic_response(data["user_prompt"],file_data)
-                        
-                        # # prompt
-                        # if data["user_prompt"]:
-                        #     eval_prompt = data["user_prompt"]
-                        # else:
-                        #     eval_prompt = EVALUATE_PROMPT
-                        
-                        col1,col2,col3 = st.columns(3)
-                        with col1:
-                            input_text = st.text_area(f"Input {num}", extracted_text, height=300, key=f"Text counter {generate_random_key(11)}")
-                        with col2:
-                            ai_summary = st.text_area(f"Post process output {num}", claude_response, height=300, key=f"Text counter {generate_random_key(12)}")
-                        with col3:
-                            gold_parameters = st.text_area(f"Gold standard output {num}", data["gold_std"], height=300, key=f"Text counter {generate_random_key(13)}")
-                        
-                        
+                        # Call to create "post process output" from LLM
+                        eval_response_1 = get_anthropic_response(data["user_prompt_1"],file_data)
 
-            #             # input_parameters = f"extracted parameters: {ai_summary}/nstandard parameters: {gold_parameters}"
-            #             # eval_claude_response = get_anthropic_response(eval_prompt, input_parameters)
+                        # Call to create an evaluation based on prompt_2 from LLM
+                        input_parameters = f"extracted parameters: {eval_response_1}/nstandard parameters: {data['gold_std']}"
+                        eval_response_2 = get_anthropic_response(data["user_prompt_2"], input_parameters)
                         
-            #             # st.text_area("Here is the evaluation", eval_claude_response, height = 200, key = "012")
+                        col1,col2,col3,col4,col5 = st.columns(5)
+                        with col1:
+                            input_text = st.text_area(f"Input {num}", extracted_text, height=200, key=f"Text counter {generate_random_key(11)}")
+                        with col2:
+                            ai_summary = st.text_area(f"Post process output {num}", eval_response_1, height=200, key=f"Text counter {generate_random_key(12)}")
+                        with col3:
+                            gold_parameters = st.text_area(f"Gold standard output {num}", data["gold_std"], height=200, key=f"Text counter {generate_random_key(13)}")
+                        with col4:
+                            llm_eval = st.text_area(f"LLM evaluation {num}", eval_response_2, height=200, key=f"Text counter {generate_random_key(14)}")
+                        with col5:
+                            human_eval = st.text_area(f"Human Eval {num}", data["human_eval"], height=200, key=f"Text counter {generate_random_key(15)}")
+
+
 
                     if "PDFMiner" in data["text_extraction"] and "GPT-4" in data["llm"]:
                             folder_key, pdf_name = upload_pdf_to_s3(data["uploaded_files"], s3_folder, bucket_name)
@@ -325,27 +450,26 @@ def main():
                             # Call to read the "raw.txt" file from the folder: "raw_text" in S3
                             file_data = read_file_from_s3(bucket_name,raw_text_path)
 
-                            # Call to create an AI_SUMMARY response from GPT-4
-                            gpt_response = get_chatgpt_response(data["user_prompt"],file_data)
-                            
-                            # # prompt
-                            # if data["user_prompt"]:
-                            #     eval_prompt = data["user_prompt"]
-                            # else:
-                            #     eval_prompt = EVALUATE_PROMPT
+                            # Call to create "post process output" from LLM
+                            eval_response_1 = get_chatgpt_response(data["user_prompt_1"],file_data)
+
+                            # Call to create an evaluation based on prompt_2 from LLM
+                            input_parameters = f"extracted parameters: {eval_response_1}/nstandard parameters: {data['gold_std']}"
+                            eval_response_2 = get_chatgpt_response(data["user_prompt_2"], input_parameters)
                                 
-                            col1,col2,col3 = st.columns(3)
+                            col1,col2,col3,col4,col5 = st.columns(5)
                             with col1:
-                                input_text = st.text_area(f"Input {num}", extracted_text, height=300, key=f"Text counter {generate_random_key(11)}")
+                                input_text = st.text_area(f"Input {num}", extracted_text, height=200, key=f"Text counter {generate_random_key(11)}")
                             with col2:
-                                ai_summary = st.text_area(f"Post process output {num}", gpt_response, height=300, key=f"Text counter {generate_random_key(12)}")                   
+                                ai_summary = st.text_area(f"Post process output {num}", eval_response_1, height=200, key=f"Text counter {generate_random_key(12)}")                   
                             with col3:
-                                gold_parameters = st.text_area(f"Gold standard output {num}", data["gold_std"], height=300, key=f"Text counter {generate_random_key(13)}")
-                            
-            #                 # input_parameters = f"extracted parameters: {ai_summary}/nstandard parameters: {gold_parameters}"
-            #                 # eval_gpt_response = get_chatgpt_response(eval_prompt, input_parameters)
-                            
-            #                 # st.text_area("Here is the evaluation", eval_gpt_response, height = 200, key = "012")
+                                gold_parameters = st.text_area(f"Gold standard output {num}", data["gold_std"], height=200, key=f"Text counter {generate_random_key(13)}")
+                            with col4:
+                                llm_eval = st.text_area(f"LLM evaluation {num}", eval_response_2, height=200, key=f"Text counter {generate_random_key(14)}")
+                            with col5:
+                                human_eval = st.text_area(f"Human Eval {num}", data["human_eval"], height=200, key=f"Text counter {generate_random_key(15)}")
+
+
 
                     if "PDFMiner" in data["text_extraction"] and "Claude-2" in data["llm"]:     
                         folder_key, pdf_name = upload_pdf_to_s3(data["uploaded_files"], s3_folder, bucket_name)
@@ -370,28 +494,24 @@ def main():
                         # Call to read the "raw.txt" file from the folder: "raw_text" in S3
                         file_data = read_file_from_s3(bucket_name,raw_text_path)
 
-                        # Call to create an AI_SUMMARY response from Claude-2
-                        claude_response = get_anthropic_response(data["user_prompt"],file_data)
-                        
-                        # # prompt
-                        # if data["user_prompt"]:
-                        #     eval_prompt = data["user_prompt"]
-                        # else:
-                        #     eval_prompt = EVALUATE_PROMPT
-                        
-                        col1,col2,col3 = st.columns(3)
-                        with col1:
-                            input_text = st.text_area(f"Input {num}", extracted_text, height=300, key=f"Text counter {generate_random_key(11)}")
-                        with col2:
-                            ai_summary = st.text_area(f"Post process output {num}", claude_response, height=300, key=f"Text counter {generate_random_key(12)}")
-                        with col3:
-                            gold_parameters = st.text_area(f"Gold standard output {num}", data["gold_std"], height=300, key=f"Text counter {generate_random_key(13)}")
-                        
+                        # Call to create "post process output" from LLM
+                        eval_response_1 = get_anthropic_response(data["user_prompt_1"],file_data)
 
-            #             # input_parameters = f"extracted parameters: {ai_summary}/nstandard parameters: {gold_parameters}"
-            #             # eval_claude_response = get_anthropic_response(eval_prompt, input_parameters)
-                        
-            #             # st.text_area("Here is the evaluation", eval_claude_response, height = 200, key = "012")
+                        # Call to create an evaluation based on prompt_2 from LLM
+                        input_parameters = f"extracted parameters: {eval_response_1}/nstandard parameters: {data['gold_std']}"
+                        eval_response_2 = get_anthropic_response(data["user_prompt_2"], input_parameters)
+
+                        col1,col2,col3,col4,col5 = st.columns(5)
+                        with col1:
+                            input_text = st.text_area(f"Input {num}", extracted_text, height=200, key=f"Text counter {generate_random_key(11)}")
+                        with col2:
+                            ai_summary = st.text_area(f"Post process output {num}", eval_response_1, height=200, key=f"Text counter {generate_random_key(12)}")
+                        with col3:
+                            gold_parameters = st.text_area(f"Gold standard output {num}", data["gold_std"], height=200, key=f"Text counter {generate_random_key(13)}")
+                        with col4:
+                            llm_eval = st.text_area(f"LLM evaluation {num}", eval_response_2, height=200, key=f"Text counter {generate_random_key(14)}")
+                        with col5:
+                            human_eval = st.text_area(f"Human Eval {num}", data["human_eval"], height=200, key=f"Text counter {generate_random_key(15)}")
 
 
 
@@ -415,27 +535,25 @@ def main():
                         # Call to read the "raw.txt" file from the folder: "raw_text" in S3
                         file_data = read_file_from_s3(bucket_name,raw_text_path)
 
-                        # Call to create an AI_SUMMARY response from GPT-4
-                        gpt_response = get_chatgpt_response(data["user_prompt"],file_data)
-                        
-                        # # prompt
-                        # if data["user_prompt"]:
-                        #     eval_prompt = data["user_prompt"]
-                        # else:
-                        #     eval_prompt = EVALUATE_PROMPT
+                        # Call to create "post process output" from LLM
+                        eval_response_1 = get_chatgpt_response(data["user_prompt_1"],file_data)
 
-                        col1,col2,col3 = st.columns(3)
+                        # Call to create an evaluation based on prompt_2 from LLM
+                        input_parameters = f"extracted parameters: {eval_response_1}/nstandard parameters: {data['gold_std']}"
+                        eval_response_2 = get_chatgpt_response(data["user_prompt_2"], input_parameters)
+
+                        col1,col2,col3,col4,col5 = st.columns(5)
                         with col1:
-                            input_text = st.text_area(f"Input {num}", data["uploaded_text"], height=300, key=f"Text counter {generate_random_key(11)}")
+                            input_text = st.text_area(f"Input {num}", data["uploaded_text"], height=200, key=f"Text counter {generate_random_key(11)}")
                         with col2:
-                            ai_summary = st.text_area(f"Post process output {num}", gpt_response, height=300, key=f"Text counter {generate_random_key(12)}")
+                            ai_summary = st.text_area(f"Post process output {num}", eval_response_1, height=200, key=f"Text counter {generate_random_key(12)}")
                         with col3:
-                            gold_parameters = st.text_area(f"Gold standard output {num}", data["gold_std"], height=300, key=f"Text counter {generate_random_key(13)}")
+                            gold_parameters = st.text_area(f"Gold standard output {num}", data["gold_std"], height=200, key=f"Text counter {generate_random_key(13)}")
+                        with col4:
+                            llm_eval = st.text_area(f"LLM evaluation {num}", eval_response_2, height=200, key=f"Text counter {generate_random_key(14)}")
+                        with col5:
+                            human_eval = st.text_area(f"Human Eval {num}", data["human_eval"], height=200, key=f"Text counter {generate_random_key(15)}")
 
-            #             # input_parameters = f"extracted parameters: {ai_summary}/nstandard parameters: {gold_parameters}"
-            #             # eval_claude_response = get_anthropic_response(eval_prompt, input_parameters)
-                        
-            #             # st.text_area("Here is the evaluation", eval_claude_response, height = 200, key = "012")
 
 
 
@@ -453,34 +571,108 @@ def main():
                         # Call to read the "raw.txt" file from the folder: "raw_text" in S3
                         file_data = read_file_from_s3(bucket_name,raw_text_path)
 
-                        # Call to create an AI_SUMMARY response from Claude-2
-                        claude_response = get_anthropic_response(data["user_prompt"],file_data)
-                        
-                        # if data["user_prompt"]:
-                        #         eval_prompt = data["user_prompt"]
-                        # else:
-                        #     eval_prompt = EVALUATE_PROMPT
-                                
-                        col1,col2,col3 = st.columns(3)
+                        # Call to create "post process output" from LLM
+                        eval_response_1 = get_anthropic_response(data["user_prompt_1"],file_data)
+
+                        # Call to create an evaluation based on prompt_2 from LLM
+                        input_parameters = f"extracted parameters: {eval_response_1}/nstandard parameters: {data['gold_std']}"
+                        eval_response_2 = get_anthropic_response(data["user_prompt_2"], input_parameters)
+
+                        col1,col2,col3,col4,col5 = st.columns(5)
                         with col1:
-                            input_text = st.text_area(f"Input {num}", data["uploaded_text"], height=300, key=f"Text counter {generate_random_key(11)}")
+                            input_text = st.text_area(f"Input {num}", data["uploaded_text"], height=200, key=f"Text counter {generate_random_key(11)}")
                         with col2:
-                            ai_summary = st.text_area(f"Post process output {num}", claude_response, height=300, key=f"Text counter {generate_random_key(12)}")
+                            ai_summary = st.text_area(f"Post process output {num}", eval_response_1, height=200, key=f"Text counter {generate_random_key(12)}")
                         with col3:
-                            gold_parameters = st.text_area(f"Gold standard output {num}", data["gold_std"], height=300, key=f"Text counter {generate_random_key(13)}")
+                            gold_parameters = st.text_area(f"Gold standard output {num}", data["gold_std"], height=200, key=f"Text counter {generate_random_key(13)}")
+                        with col4:
+                            llm_eval = st.text_area(f"LLM evaluation {num}", eval_response_2, height=200, key=f"Text counter {generate_random_key(14)}")
+                        with col5:
+                            human_eval = st.text_area(f"Human Eval {num}", data["human_eval"], height=200, key=f"Text counter {generate_random_key(15)}")
 
 
-            #             # input_parameters = f"extracted parameters: {ai_summary}/nstandard parameters: {gold_parameters}"
-            #             # eval_claude_response = get_anthropic_response(eval_prompt, input_parameters)
-                        
-            #             # st.text_area("Here is the evaluation", eval_claude_response, height = 200, key = "012")
+
+                # Update the response_data dictionary with the processed data
+                response_data["Input"] = input_text
+                response_data["Post process output"] = ai_summary
+                response_data["Gold standard output"] = gold_parameters
+                response_data["LLM evaluation"] = llm_eval
+                response_data["Human Eval"] = human_eval
+
+                # Append the dictionary to the data list
+                data_list.append(response_data)
+
+
+            # Create a pandas DataFrame from the list of dictionaries
+            df = pd.DataFrame(data_list)
+
+            # Reset the index to start from 1 instead of 0
+            df.index = range(1, len(df) + 1)
+
+            custom_css = f"""
+            <style>
+            table th {{
+                text-align: center !important;
+            }}
+            table td {{
+                text-align: justify !important;
+                white-space: normal !important;
+                vertical-align: top !important;
+                {df.applymap(set_max_cell_height).to_html(classes='col-1', escape=False)}
+            }}
+            </style>
+            """
+
+            # Apply the custom CSS
+            st.markdown(custom_css, unsafe_allow_html=True)
+
+            # st.table(df)
+
+            # Save the PDF and provide the download link
+            pdf_filename = "data_table.pdf"
+            generate_pdf(df, pdf_filename)
+            with open(pdf_filename, "rb") as pdf_file:
+                pdf_bytes = pdf_file.read()
+                st.markdown(get_binary_file_downloader_html(pdf_filename, pdf_bytes), unsafe_allow_html=True)
+
+
+
             
-                num +=1
-           
-            # USER_EVALUATE_PROMPT_2 = st.text_area("Enter the prompt here", "", height=100, key=f"Text counter {generate_random_key(14)}")
-            download = st.button("Download the results")
-            #     # else:
-            #     #     st.error("No uploaded files found in data.")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            # ######################### PDF Generation: version 1 #############################
+            
+            # # Generate the PDF
+            # pdf_filename = "output.pdf"
+            # dataframe_to_pdf(df, pdf_filename)
+
+            # # Trigger the download of the PDF
+            # with open(pdf_filename, "rb") as pdf_file:
+            #     pdf_bytes = pdf_file.read()
+            #     st.markdown(get_binary_file_downloader_html(pdf_filename, pdf_bytes), unsafe_allow_html=True)
          
 
 

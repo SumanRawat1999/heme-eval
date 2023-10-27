@@ -23,6 +23,10 @@ from LLM import get_chatgpt_response, get_anthropic_response
 # from prompts import AI_SUMMARY_PROMPT, EVALUATE_PROMPT, CLAUDE_AI_SUMMARY_PROMPT, CLAUDE_EVALUATE_PROMPT, PDFMINER_EVALUATE_PROMPT
 from streamlit import session_state as state
 from UI import TextFieldsManager
+from reportlab.lib.pagesizes import letter, landscape
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+from reportlab.platypus.tables import TableStyleValue
+
 
 # Loading the variables from .env file
 load_dotenv()
@@ -169,40 +173,62 @@ def generate_random_key(length):
     return random_key
 
 
-# Function to convert DataFrame to PDF
-def _draw_as_table(df, pagesize):
-    alternating_colors = [['white'] * len(df.columns), ['lightgray'] * len(df.columns)] * len(df)
-    alternating_colors = alternating_colors[:len(df)]
-    fig, ax = plt.subplots(figsize=pagesize)
-    ax.axis('tight')
-    ax.axis('off')
-    the_table = ax.table(cellText=df.values,
-                         rowLabels=df.index,
-                         colLabels=df.columns,
-                         rowColours=['lightblue'] * len(df),
-                         colColours=['lightblue'] * len(df.columns),
-                         cellColours=alternating_colors,
-                         cellLoc='left',
-                         loc='center')
-    return fig
 
-# Function to create PDF from DataFrame
-def dataframe_to_pdf(df, filename, numpages=(1, 1), pagesize=(11, 8.5)):
-    with PdfPages(filename) as pdf:
-        nh, nv = numpages
-        rows_per_page = len(df) // nh
-        cols_per_page = len(df.columns) // nv
-        for i in range(0, nh):
-            for j in range(0, nv):
-                page = df.iloc[(i * rows_per_page):min((i + 1) * rows_per_page, len(df)),
-                               (j * cols_per_page):min((j + 1) * cols_per_page, len(df.columns))]
-                fig = _draw_as_table(page, pagesize)
-                if nh > 1 or nv > 1:
-                    fig.text(0.5, 0.5 / pagesize[0],
-                             "Part-{}x{}: Page-{}".format(i + 1, j + 1, i * nv + j + 1),
-                             ha='center', fontsize=8)
-                pdf.savefig(fig, bbox_inches='tight')
-                plt.close()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ########################### VERSION 1: PDF generation ###############################################
+
+
+# # Function to convert DataFrame to PDF
+# def _draw_as_table(df, pagesize):
+#     alternating_colors = [['white'] * len(df.columns), ['lightgray'] * len(df.columns)] * len(df)
+#     alternating_colors = alternating_colors[:len(df)]
+#     fig, ax = plt.subplots(figsize=pagesize)
+#     ax.axis('tight')
+#     ax.axis('off')
+#     the_table = ax.table(cellText=df.values,
+#                          rowLabels=df.index,
+#                          colLabels=df.columns,
+#                          rowColours=['lightblue'] * len(df),
+#                          colColours=['lightblue'] * len(df.columns),
+#                          cellColours=alternating_colors,
+#                          cellLoc='left',
+#                          loc='center')
+#     return fig
+
+# # Function to create PDF from DataFrame
+# def dataframe_to_pdf(df, filename, numpages=(1, 1), pagesize=(11, 8.5)):
+#     with PdfPages(filename) as pdf:
+#         nh, nv = numpages
+#         rows_per_page = len(df) // nh
+#         cols_per_page = len(df.columns) // nv
+#         for i in range(0, nh):
+#             for j in range(0, nv):
+#                 page = df.iloc[(i * rows_per_page):min((i + 1) * rows_per_page, len(df)),
+#                                (j * cols_per_page):min((j + 1) * cols_per_page, len(df.columns))]
+#                 fig = _draw_as_table(page, pagesize)
+#                 if nh > 1 or nv > 1:
+#                     fig.text(0.5, 0.5 / pagesize[0],
+#                              "Part-{}x{}: Page-{}".format(i + 1, j + 1, i * nv + j + 1),
+#                              ha='center', fontsize=8)
+#                 pdf.savefig(fig, bbox_inches='tight')
+#                 plt.close()
+
 
 # Function to enable file download
 def get_binary_file_downloader_html(pdf_filename, pdf_bytes):
@@ -211,17 +237,70 @@ def get_binary_file_downloader_html(pdf_filename, pdf_bytes):
     return href
 
 
-def create_session_state():
-    return {"user_input_list": []}
+#  #####################################################################################################
 
-state = create_session_state()
 
-def update_user_input_list(index, field, value):
-    user_input_list = state["user_input_list"]
-    if index < len(user_input_list):
-        user_input = user_input_list[index]
-        user_input[field] = value
-        state["user_input_list"] = user_input_list
+
+
+# Define a custom function to set the cell height based on the content length
+def set_max_cell_height(val, max_height=300):
+    if isinstance(val, str):
+        return f'height: {max(len(val), max_height)}px'
+    return ''
+
+
+# Create a Streamlit download link for the PDF
+# def download_link(pdf_data, filename):
+#     st.markdown(
+#         f'<a href="data:application/pdf;base64,{pdf_data}" download="{filename}">Click here to download the PDF</a>',
+#         unsafe_allow_html=True,
+#     )
+
+
+def generate_pdf(data_frame, filename):
+    # Use landscape page orientation and set page size to fit the table
+    doc = SimpleDocTemplate(filename, pagesize=landscape(letter))
+    elements = []
+
+    # Convert the DataFrame to a list of lists
+    data = [list(data_frame.columns)] + data_frame.values.tolist()
+
+    # Calculate the width of the table based on the number of columns
+    num_cols = len(data[0])
+    col_width = doc.width / num_cols
+    table = Table(data, colWidths=[col_width] * num_cols)
+
+    # Define the table style
+    style = TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), (0.8, 0.8, 0.8)),  # Header row background color
+        ('TEXTCOLOR', (0, 0), (-1, 0), (0, 0, 0)),  # Header row text color
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),  # All cells center-aligned
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),  # Header row font
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),  # Header row padding
+        ('BACKGROUND', (0, 1), (-1, -1), (0.9, 0.9, 0.9)),  # Data row background color
+        ('TEXTCOLOR', (0, 1), (-1, -1), (0, 0, 0)),  # Data row text color
+        ('GRID', (0, 0), (-1, -1), 1, (0, 0, 0)),  # Gridlines
+        ('WORDWRAP', (0, 1), (-1, -1)),  # Enable text wrapping in data rows
+    ])
+    table.setStyle(style)
+    elements.append(table)
+
+    # Build the PDF
+    doc.build(elements)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def main():
@@ -307,8 +386,7 @@ def main():
                         with col4:
                             llm_eval = st.text_area(f"LLM evaluation {num}", eval_response_2, height=200, key=f"Text counter {generate_random_key(14)}")
                         with col5:
-                            human_eval = st.text_area(f"Human Eval {num}", data["human_eval"], height=200, key=f"Text counter {generate_random_key(15)}")
-                            update_user_input_list(num - 1, "Human Eval", human_eval)                    
+                            human_eval = st.text_area(f"Human Eval {num}", data["human_eval"], height=200, key=f"Text counter {generate_random_key(15)}")                  
                         
 
 
@@ -352,7 +430,6 @@ def main():
                             llm_eval = st.text_area(f"LLM evaluation {num}", eval_response_2, height=200, key=f"Text counter {generate_random_key(14)}")
                         with col5:
                             human_eval = st.text_area(f"Human Eval {num}", data["human_eval"], height=200, key=f"Text counter {generate_random_key(15)}")
-                            update_user_input_list(num - 1, "Human Eval", human_eval)
 
 
 
@@ -397,7 +474,6 @@ def main():
                                 llm_eval = st.text_area(f"LLM evaluation {num}", eval_response_2, height=200, key=f"Text counter {generate_random_key(14)}")
                             with col5:
                                 human_eval = st.text_area(f"Human Eval {num}", data["human_eval"], height=200, key=f"Text counter {generate_random_key(15)}")
-                                update_user_input_list(num - 1, "Human Eval", human_eval)
 
 
 
@@ -442,7 +518,7 @@ def main():
                             llm_eval = st.text_area(f"LLM evaluation {num}", eval_response_2, height=200, key=f"Text counter {generate_random_key(14)}")
                         with col5:
                             human_eval = st.text_area(f"Human Eval {num}", data["human_eval"], height=200, key=f"Text counter {generate_random_key(15)}")
-                            update_user_input_list(num - 1, "Human Eval", human_eval)
+
 
 
 
@@ -483,7 +559,7 @@ def main():
                             llm_eval = st.text_area(f"LLM evaluation {num}", eval_response_2, height=200, key=f"Text counter {generate_random_key(14)}")
                         with col5:
                             human_eval = st.text_area(f"Human Eval {num}", data["human_eval"], height=200, key=f"Text counter {generate_random_key(15)}")
-                            update_user_input_list(num - 1, "Human Eval", human_eval)
+
 
 
 
@@ -519,7 +595,6 @@ def main():
                             llm_eval = st.text_area(f"LLM evaluation {num}", eval_response_2, height=200, key=f"Text counter {generate_random_key(14)}")
                         with col5:
                             human_eval = st.text_area(f"Human Eval {num}", data["human_eval"], height=200, key=f"Text counter {generate_random_key(15)}")
-                            update_user_input_list(num - 1, "Human Eval", human_eval)
 
 
 
@@ -533,71 +608,77 @@ def main():
                 # Append the dictionary to the data list
                 data_list.append(response_data)
 
-                #num +=1
 
             # Create a pandas DataFrame from the list of dictionaries
             df = pd.DataFrame(data_list)
 
-            # # Create a DataFrame with the specified columns
-            #     data_dict = {
-            #         "Input": [extracted_text],
-            #         "Post process output": [eval_response_1],
-            #         "Gold standard output": [data["gold_std"]],
-            #         "LLM evaluation": [eval_response_2],
-            #         "Human Eval": [data["human_eval"]]
-            #         # "Column Name": ["Input", "Post process output", "Gold standard output", "LLM evaluation", "Human Eval"],
-            #         # "Text": [extracted_text, eval_response_1, data["gold_std"], eval_response_2, data["human_eval"]]
-            #     }
+            # Reset the index to start from 1 instead of 0
+            df.index = range(1, len(df) + 1)
 
-            # df = pd.DataFrame(data_dict)
-            # pd.set_option('display.max_colwidth',0)
+            custom_css = f"""
+            <style>
+            table th {{
+                text-align: center !important;
+            }}
+            table td {{
+                text-align: justify !important;
+                white-space: normal !important;
+                vertical-align: top !important;
+                {df.applymap(set_max_cell_height).to_html(classes='col-1', escape=False)}
+            }}
+            </style>
+            """
 
-            # Create the table with formatting
-            st.dataframe(df.style.set_properties(**{'white-space': 'pre-wrap', 'text-align': 'left'}), width=0, height=0)
+            # Apply the custom CSS
+            st.markdown(custom_css, unsafe_allow_html=True)
 
-            # Apply column width customization
-            st.write(
-                """
-                <style>
-                    .dataframe tbody tr:nth-child(1) td {
-                        max-width: 200px;
-                    }
-                </style>
-                """,
-                unsafe_allow_html=True,
-            )    
+            st.table(df)
 
-            
-            #     # Update the response_data dictionary with the processed data
-            #     response_data["Input"] = input_text
-            #     response_data["Post process output"] = ai_summary
-            #     response_data["Gold standard output"] = gold_parameters
-            #     response_data["LLM evaluation"] = llm_eval
-            #     response_data["Human Eval"] = human_eval
-
-            #     # Append the dictionary to the data list
-            #     data_list.append(response_data)
-
-            #     #num +=1
-
-            # # Create a pandas DataFrame from the list of dictionaries
-            # df = pd.DataFrame(data_list)
-
-
-            # Generate the PDF
-            pdf_filename = "output.pdf"
-            dataframe_to_pdf(df, pdf_filename)
-
-            # Trigger the download of the PDF
+            # Save the PDF and provide the download link
+            pdf_filename = "data_table.pdf"
+            generate_pdf(df, pdf_filename)
             with open(pdf_filename, "rb") as pdf_file:
                 pdf_bytes = pdf_file.read()
                 st.markdown(get_binary_file_downloader_html(pdf_filename, pdf_bytes), unsafe_allow_html=True)
 
 
 
-            # download = st.button("Download the results")
-            #     # else:
-            #     #     st.error("No uploaded files found in data.")
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            # ######################### PDF Generation: version 1 #############################
+            
+            # # Generate the PDF
+            # pdf_filename = "output.pdf"
+            # dataframe_to_pdf(df, pdf_filename)
+
+            # # Trigger the download of the PDF
+            # with open(pdf_filename, "rb") as pdf_file:
+            #     pdf_bytes = pdf_file.read()
+            #     st.markdown(get_binary_file_downloader_html(pdf_filename, pdf_bytes), unsafe_allow_html=True)
          
 
 

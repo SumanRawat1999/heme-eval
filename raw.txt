@@ -1,21 +1,2 @@
-1. Haemoglobin(Hb) : 14.4 gm/dl, Reference Range: 13.5-18.0 gm/dl
-2. Erythrocyte(RBC) Count : 4.90 mill/cu.mm, Reference Range: 4.7-6.0 mill/cu.mm
-3. Hematocrit(HCT) : 42.1, Reference Range: 40-50
-4. MCV(Mean Corpuscular Volume) : 85.92 fl, Reference Range: 83-101 fl
-5. MCH(Mean Corpuscular Hb) : 29.39 pg, Reference Range: 27-31 pg
-6. MCHC(Mean Corpuscular Hb Conc.) : 34.2 g/dl, Reference Range: 31.5-34.5 g/dl
-7. RDW(Red Cell Distribution Width) : 13.0 %, Reference Range: 11.5-14.0 %
-8. Total Leucocytes (WBC) Count : 5470 cells/cu.mm, Reference Range: 4000-10500 cells/cu.mm
-9. Neutrophils : 47
-10. Lymphocytes : 44
-11. Eosinophils : 03
-12. Monocytes : 06
-13. Basophils : 00
-14. Platelet count : 168000
-15. RBC Morphology : NORMOCHROMIC NORMOCYTIC
-16. WBC Morphology : NORMAL
-17. D- DIMER : 220.70 ng FEU/mL, Reference Range: 0-500 ng FEU/mL
-18. SODIUM (Na+) : 143.9 mmol/L, Reference Range: 137-145 mmol/L
-19. POTASSIUM (K+) : 4.16 mmol/L, Reference Range: 3.6-5.1 mmol/L
-20. CHLORIDE : 103.6 mmol/L, Reference Range: 98-107 mmol/L
-21. CRP : 16.62 mg/L, Reference Range: 0-6.0 mg/L
+1. BLOOD GROUP: A Rh(D) Positive,
+2. BILIRUBIN TOTAL: 13.74 mg/dl with reference range 0.1-1.2 mg/dl,
