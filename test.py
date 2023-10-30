@@ -19,7 +19,8 @@ import openai
 import uuid # to create random unique names for files
 from botocore.exceptions import BotoCoreError, ClientError
 from text_extraction import TextractExtractor, PDFMinerExtractor
-from LLM import get_chatgpt_response, get_anthropic_response
+from anthropic import Anthropic,HUMAN_PROMPT, AI_PROMPT
+# from LLM import get_chatgpt_response, get_anthropic_response
 # from prompts import AI_SUMMARY_PROMPT, EVALUATE_PROMPT, CLAUDE_AI_SUMMARY_PROMPT, CLAUDE_EVALUATE_PROMPT, PDFMINER_EVALUATE_PROMPT
 from streamlit import session_state as state
 from UI import TextFieldsManager
@@ -27,12 +28,14 @@ from reportlab.lib.pagesizes import letter, landscape
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 # from reportlab.platypus.tables import TableStyleValue
 
+st.set_page_config(layout="wide")
 
-# Loading the variables from .env file
-load_dotenv()
+# api key instance
+ui_instance = TextFieldsManager()
+api_key = ui_instance.api_and_input_type()
+api_key = str(api_key)
 
-# Import openai api key
-openai.api_key = os.environ["openai_api_key"]
+
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -51,7 +54,6 @@ s3 = boto3.client(service_name='s3',region_name=aws_default_region,
                 aws_access_key_id=aws_access_key_id,
                 aws_secret_access_key=aws_secret_access_key)
 
-st.set_page_config(layout="wide")
 
 
 def upload_pdf_to_s3(uploaded_files, s3_folder, bucket_name):
@@ -174,6 +176,53 @@ def generate_random_key(length):
 
 
 
+def get_chatgpt_response(AI_SUMMARY_PROMPT,input_text):
+
+    """
+    Fetches a response from the GPT-4 model using OpenAI's ChatCompletion.
+    
+    Args:
+    - pre_text (str): The user's input text.
+
+    Returns:
+    - str: The model's response.
+    """
+
+    openai.api_key = api_key
+    
+    try:
+        gpt4_res = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": AI_SUMMARY_PROMPT},
+                {"role": "user", "content": input_text}
+            ],
+            temperature=0
+        )
+        
+        return gpt4_res["choices"][0]["message"]["content"]
+
+    except openai.error.OpenAIError as api_error:
+        st.error(f"Error during OpenAI API call: {api_error}")
+        return ""
+    except Exception as e:
+        st.error(f"An unexpected error occurred: {e}")
+        return ""
+    
+def get_anthropic_response(AI_SUMMARY_PROMPT, input_text):
+    final_prompt = f"{AI_SUMMARY_PROMPT}/n{input_text}"
+    # Initialize Anthropic client
+    anthropic = Anthropic(api_key=api_key)
+
+    # Create a completion
+    completion = anthropic.completions.create(temperature=0,
+        model="claude-2",
+        max_tokens_to_sample=2000,
+        prompt=f"{HUMAN_PROMPT} {final_prompt} {AI_PROMPT}",
+    )
+    
+    # Return the completion text
+    return completion.completion
 
 
 
@@ -298,8 +347,11 @@ def generate_pdf(data_frame, filename):
 
 
 def main():
-    text_fields_manager = TextFieldsManager()
-    submit, user_input_list = text_fields_manager.run()
+    TextFieldsManager.key_prefix = "test_"
+    TextFieldsManager.key_suffix = "test_1_"
+    # text_fields_manager = TextFieldsManager()
+    # st.write(text_fields_manager)
+    submit, user_input_list = ui_instance.run()
     
     if submit:
         with st.spinner("Loading"):
