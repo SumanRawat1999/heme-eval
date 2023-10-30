@@ -1,15 +1,22 @@
 import streamlit as st
 
 class TextFieldsManager:
+    key_prefix = ""
+    key_suffix = ""
     def __init__(self):
         self.counter = 1
         self.user_input_list = []
         self.USER_EVALUATE_PROMPT_2 = ""
 
+    def api_and_input_type(self):
+        col6, col7, col8 = st.columns(3)
+        col7.title("Generic Evaluation")
+        self.api = st.text_input("Enter api key","", key=f"{self.key_prefix}unique_api_key_0")
+        self.input_type = st.selectbox("Please Choose the type of Input", ['', 'Upload a file', 'Input text'], key=f"{self.key_suffix}unique_api_key_1")
+        return self.api
 
     def process(self):
-        with st.expander('Select the process',expanded=True):
-            self.input_type = st.selectbox("Please Choose the type of Input", ['', 'Upload a file', 'Input text'], key=f"123")
+        with st.expander('Select the process',expanded=True):           
             if 'Upload a file' in self.input_type:
                 self.text_extraction = st.multiselect('Select a text extraction tool', ['Textract', 'PDFMiner'],max_selections=1, key=f"234")
                 
@@ -70,11 +77,11 @@ class TextFieldsManager:
 
     def run(self):
 
-        col6, col7, col8 = st.columns(3)
-
-        col7.title("Generic Evaluation")
+        # self.api_and_input_type()
 
         self.process()
+
+        submit = False  # Initialize submit with a default value
 
         if self.input_type in ['Upload a file','Input text']:
             st.subheader("", divider='rainbow') 
@@ -98,14 +105,12 @@ class TextFieldsManager:
                     self.counter += 6
 
             
-
-        
-        st.subheader("", divider='rainbow')
-        self.USER_EVALUATE_PROMPT_2 = st.text_area("Enter the prompt for evaluation here", "", height=100, key=f"890")
-        for data in self.user_input_list:
-            data['user_prompt_2'] = self.USER_EVALUATE_PROMPT_2
-        # self.user_input['user_prompt_2'] = self.USER_EVALUATE_PROMPT_2
-        #self.user_input_list.pop()
-        submit = st.button("Submit")
+            st.subheader("", divider='rainbow')
+            self.USER_EVALUATE_PROMPT_2 = st.text_area("Enter the prompt for evaluation here", "", height=100, key=f"890")
+            for data in self.user_input_list:
+                data['user_prompt_2'] = self.USER_EVALUATE_PROMPT_2
+            # self.user_input['user_prompt_2'] = self.USER_EVALUATE_PROMPT_2
+            #self.user_input_list.pop()
+            submit = st.button("Submit")
         
         return submit, self.user_input_list
